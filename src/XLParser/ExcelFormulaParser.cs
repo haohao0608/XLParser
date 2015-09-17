@@ -478,10 +478,15 @@ namespace XLParser
             }
         }
 
+        public static string Print(this ParseTreeNode input)
+        {
+            return Print(input, Print);
+        }
+
         /// <summary>
         /// Pretty-print a parse tree to a string
         /// </summary>
-        public static string Print(this ParseTreeNode input)
+        public static string Print(ParseTreeNode input, Func<ParseTreeNode, string> customPrinter)
         {
             // For terminals, just print the token text
             if (input.Term is Terminal)
@@ -490,7 +495,7 @@ namespace XLParser
             }
 
             // (Lazy) enumerable for printed childs
-            var childs = input.ChildNodes.Select(Print);
+            var childs = input.ChildNodes.Select(customPrinter);
             // Concrete list when needed
             List<string> childsL;
 

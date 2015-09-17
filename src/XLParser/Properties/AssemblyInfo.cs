@@ -34,9 +34,9 @@ using System.Runtime.InteropServices;
 // [assembly: AssemblyVersion("1.0.*")]
 
 // Free form tag, use the version tag from git
-[assembly: AssemblyInformationalVersion("1.2.0")]
+[assembly: AssemblyInformationalVersion("1.2.1-alpha")]
 // This is what other developers reference. As such this should change at breaking changes, but not otherwise
 // so use major.minor.0.0
 [assembly: AssemblyVersion("1.2.0.0")]
 // This isn't used by .NET but requires the 4-number format, use major.minor.patch.0
-[assembly: AssemblyFileVersion("1.2.0.0")]
+[assembly: AssemblyFileVersion("1.2.1.0")]
