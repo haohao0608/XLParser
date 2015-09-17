@@ -1,9 +1,7 @@
-﻿using Irony.Parsing;
-using System;
-using System.Collections.Generic;
-using System.Dynamic;
+﻿using System;
+using Irony.Parsing;
 
-namespace XLParser
+namespace XLParser.Web.XLParserVersions.v120
 {
     /// <summary>
     /// Contains the XLParser grammar

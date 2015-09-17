@@ -4,7 +4,12 @@ using System.Web;
 using Irony.Parsing;
 using Newtonsoft.Json;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Reflection;
+using System.Diagnostics;
+using System.Net;
+using System.Text.RegularExpressions;
 
 namespace XLParser.Web
 {
@@ -24,6 +29,8 @@ namespace XLParser.Web
             false;
         #endif
 
+        private const string latestVersion = "120";
+
         public void ProcessRequest(HttpContext context)
         {
             ctx = context;
@@ -34,6 +41,32 @@ namespace XLParser.Web
                 context.Response.Cache.SetExpires(DateTime.Now.AddMinutes(5));
                 context.Response.Cache.SetMaxAge(new TimeSpan(0, 0, 5));
             }
+
+             // Dynamically load a library version
+            var xlparserVersion = context.Request.Params["version"] ?? latestVersion;
+            if (!Regex.IsMatch(xlparserVersion, @"^[0-9]{3}[\-a-z0-9]*$"))
+            {
+                context.Response.StatusCode = (int) HttpStatusCode.BadRequest;
+                ctx.Response.ContentType = "text/plain";
+                w("Invalid version");
+                context.Response.End();
+                return;
+            }
+
+            try
+            {
+                LoadXLParserVersion(xlparserVersion);
+            }
+            catch (ArgumentException)
+            {
+                context.Response.StatusCode = (int) HttpStatusCode.NotFound;
+                ctx.Response.ContentType = "text/plain";
+                w("Version doesn't exist");
+                context.Response.End();
+                return;
+            }
+
+
             // We want to actually give meaningful HTTP error codes and not have IIS interfere
             context.Response.TrySkipIisCustomErrors = true;
 
@@ -48,7 +81,7 @@ namespace XLParser.Web
                 default:
                     context.Response.StatusCode = 415;
                     ctx.Response.ContentType = "text/plain";
-                    w(String.Format("Format '{0}' not supported.", format));
+                    w($"Format '{format}' not supported.");
                     context.Response.End();
                     break;
             }
@@ -67,13 +100,14 @@ namespace XLParser.Web
             ParseTreeNode root;
             try
             {
-                root = XLParser.ExcelFormulaParser.Parse(formula);
+                //root = XLParser.ExcelFormulaParser.Parse(formula);
+                root = parse(formula);
             }
             catch (ArgumentException)
             {
                 // Parse error, return 422 - Unprocessable Entity
                 ctx.Response.StatusCode = 422;
-                var r = new Parser(new ExcelFormulaGrammar()).Parse(formula);
+                var r = new Parser((Grammar)Activator.CreateInstance(grammar)).Parse(formula);
                 w(JsonConvert.SerializeObject(new
                 {
                     error = "Parse error",
@@ -103,7 +137,7 @@ namespace XLParser.Web
             ctx.Response.End();
         }
 
-        private static JSONNode ToJSON(ParseTreeNode node)
+        private JSONNode ToJSON(ParseTreeNode node)
         {
             return new JSONNode
             {
@@ -118,22 +152,55 @@ namespace XLParser.Web
             public IEnumerable<JSONNode> children;
         }
 
-        private static string NodeText(ParseTreeNode node)
+        private string NodeText(ParseTreeNode node)
         {
-            if (node.Term is NonTerminal) return node.Type();
+            if (node.Term is NonTerminal) return node.Term.Name;
 
             // These are simple terminals like + or =, just print them
-            if (node.Type().Length <= 2) return node.Print();
-
             // For other terminals, print the terminal name + contents
-            return String.Format("{0}[\"{1}\"]", node.Type(), node.Print());
+            return node.Term.Name.Length <= 2 ? print(node) : $"{node.Term.Name}[\"{print(node)}\"]";
         }
 
-        public bool IsReusable
+        private Func<string, ParseTreeNode> parse;
+        private Func<ParseTreeNode, string> print;
+        private Type grammar;
+
+        // Yes, this is f-ugly. Better solutions were tried (dynamically loading through reflection, extern alias and separate appdomains) but failed.
+        // Mainly this is because .NET is very very picky about loading multiple versions of libraries with the same name
+        private void LoadXLParserVersion(string version)
         {
-            // Return false in case your Managed Handler cannot be reused for another request.
-            // Usually this would be false in case you have some state information preserved per request.
-            get { return true; }
+            switch (version)
+            {
+                case "100":
+                    parse = XLParserVersions.v100.ExcelFormulaParser.Parse;
+                    print = XLParserVersions.v100.ExcelFormulaParser.Print;
+                    grammar = typeof(XLParserVersions.v100.ExcelFormulaGrammar);
+                    break;
+                case "112":
+                    parse = XLParserVersions.v112.ExcelFormulaParser.Parse;
+                    print = XLParserVersions.v112.ExcelFormulaParser.Print;
+                    grammar = typeof(XLParserVersions.v112.ExcelFormulaGrammar);
+                    break;
+                case "113":
+                    parse = XLParserVersions.v113.ExcelFormulaParser.Parse;
+                    print = XLParserVersions.v113.ExcelFormulaParser.Print;
+                    grammar = typeof(XLParserVersions.v113.ExcelFormulaGrammar);
+                    break;
+                case "114":
+                    parse = XLParserVersions.v114.ExcelFormulaParser.Parse;
+                    print = XLParserVersions.v114.ExcelFormulaParser.Print;
+                    grammar = typeof(XLParserVersions.v114.ExcelFormulaGrammar);
+                    break;
+                case "120":
+                    parse = XLParserVersions.v120.ExcelFormulaParser.Parse;
+                    print = XLParserVersions.v120.ExcelFormulaParser.Print;
+                    grammar = typeof(XLParserVersions.v120.ExcelFormulaGrammar);
+                    break;
+                default:
+                    throw new ArgumentException($"Version {version} doesn't exist");
+            }
         }
+
+        public bool IsReusable => true;
     }
 }

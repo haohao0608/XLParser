@@ -9,7 +9,7 @@ using Irony.Parsing;
 namespace XLParser.Tests
 {
     [TestClass]
-    public class ParsingTests
+    public class ParserTests
     {
         [TestMethod]
         // Ensure that the grammar has no conflicts
@@ -41,12 +41,12 @@ namespace XLParser.Tests
             Assert.IsTrue(parser.Language.Errors.Count == 0, "Grammar has {0} error(s) or conflict(s)", parser.Language.Errors.Count);
         }
 
-        private ParseTreeNode parse(string input)
+        private static ParseTreeNode parse(string input)
         {
             return ExcelFormulaParser.Parse(input);
         }
 
-        private void test(string input, Predicate<ParseTreeNode> condition = null)
+        internal static void test(string input, Predicate<ParseTreeNode> condition = null)
         {
             var p = parse(input);
             if (condition != null)
@@ -251,8 +251,8 @@ namespace XLParser.Tests
         [TestMethod]
         public void Union()
         {
-            test("LARGE((F38,C38),1)", node => node.ChildNodes[1].GetFunction() == ",");
-            test("LARGE((2:2,C38,$A$1:A6),1)", node => node.ChildNodes[1].GetFunction() == ",");   
+            test("LARGE((F38,C38),1)", node => node.ChildNodes[1].ChildNodes[0].SkipToRelevant().GetFunction() == ",");
+            test("LARGE((2:2,C38,$A$1:A6),1)", node => node.ChildNodes[1].ChildNodes[0].SkipToRelevant().GetFunction() == ",");   
         }
 
         [TestMethod]
@@ -670,6 +670,25 @@ namespace XLParser.Tests
             var union = ExcelFormulaParser.Parse("(A1,A2)");
             Assert.IsFalse(union.IsParentheses());
             Assert.IsFalse(union.ChildNodes[0].IsParentheses());
+        }
+
+        [TestMethod]
+        public void TestQuotedFileSheetWithPath()
+        {
+            test(@"='C:\mypath\[myfile.xlsm]Sheet'!A1");
+        }
+
+        [TestMethod]
+        public void TestFileNameString()
+        {
+            test("=[sheet]!A1", "=[sheet.xls]!A1");
+        }
+
+        [TestMethod]
+        public void TestStructuredReferences()
+        {
+            // Examples from msdn support document about structured references: https://support.office.com/en-us/article/Using-structured-references-with-Excel-tables-f5ed2452-2337-4f71-bed3-c8ae6d2b276e
+            test();
         }
     }
 }

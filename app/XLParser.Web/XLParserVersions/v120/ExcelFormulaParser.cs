@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Irony.Parsing;
 
-namespace XLParser
+namespace XLParser.Web.XLParserVersions.v120
 {
     /// <summary>
     /// Excel formula parser <br/>

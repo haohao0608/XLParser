@@ -1,25 +1,23 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
+using System.Data;
+using System.IO;
 using System.Linq;
 using Irony.Parsing;
 
-namespace XLParser
+namespace XLParser.Web.XLParserVersions.v112
 {
     /// <summary>
     /// Excel formula parser <br/>
     /// Contains parser and utilities that operate directly on the parse tree, or makes working with the parse tree easier.
     /// </summary>
-    public static class ExcelFormulaParser
+public static class ExcelFormulaParser
     {
         /// <summary>
-        /// Thread-local singleton parser instance
+        /// Singleton parser instance
         /// </summary>
-        [ThreadStatic] private static Parser _p;
-
-        /// <summary>
-        /// Thread-safe parser
-        /// </summary>
-        private static Parser p => _p ?? (_p = new Parser(new ExcelFormulaGrammar()));
+        private readonly static Parser p = new Parser(new ExcelFormulaGrammar());
 
         /// <summary>
         /// Parse a formula, return the the tree's root node
@@ -55,11 +53,10 @@ namespace XLParser
         }
 
         /// <summary>
-        /// Non-terminal nodes in depth-first pre-order, with a conditional stop
+        /// All non-terminal nodes in depth-first pre-order
         /// </summary>
-        /// <param name="stopAt">Don't process the children of a node matching this predicate</param>
         // inspiration taken from https://irony.codeplex.com/discussions/213938
-        public static IEnumerable<ParseTreeNode> AllNodesConditional(this ParseTreeNode root, Predicate<ParseTreeNode> stopAt = null)
+        public static IEnumerable<ParseTreeNode> AllNodes(this ParseTreeNode root)
         {
             var stack = new Stack<ParseTreeNode>();
             stack.Push(root);
@@ -69,9 +66,6 @@ namespace XLParser
                 var node = stack.Pop();
                 yield return node;
 
-                // Check if we don't want to process the children of this node
-                if (stopAt != null && stopAt(node)) continue;
-
                 var children = node.ChildNodes;
                 // Push children on in reverse order so that they will
                 // be evaluated left -> right when popped.
@@ -80,14 +74,6 @@ namespace XLParser
                     stack.Push(children[i]);
                 }
             }
-        }
-
-        /// <summary>
-        /// All non-terminal nodes in depth-first pre-order
-        /// </summary>
-        public static IEnumerable<ParseTreeNode> AllNodes(this ParseTreeNode root)
-        {
-            return AllNodesConditional(root);
         }
 
         /// <summary>
@@ -104,17 +90,11 @@ namespace XLParser
         }
 
         /// <summary>
-        /// Get the parent node of a node
+        /// Whether this tree contains any nodes of a type
         /// </summary>
-        /// <remarks>
-        /// This is an expensive operation, as the whole tree will be searched through
-        /// </remarks>
-        public static ParseTreeNode Parent(this ParseTreeNode child, ParseTreeNode treeRoot)
+        public static bool Contains(this ParseTreeNode root, string type)
         {
-            var parent = treeRoot.AllNodes()
-                .FirstOrDefault(node => node.ChildNodes.Any(c => c == child));
-            if(parent == null) throw new ArgumentException("Child is not part of the tree", nameof(child));
-            return parent;
+            return root.AllNodes(type).Any();
         }
 
         /// <summary>
@@ -169,11 +149,6 @@ namespace XLParser
                    && input.ChildNodes[1].Term.Flags.HasFlag(TermFlags.IsOperator);
         }
 
-        public static bool IsBinaryNonReferenceOperation(this ParseTreeNode input)
-        {
-            return input.IsBinaryOperation() && input.Is(GrammarNames.FunctionCall);
-        }
-
         public static bool IsBinaryReferenceOperation(this ParseTreeNode input)
         {
             return input.IsBinaryOperation() && input.Is(GrammarNames.ReferenceFunctionCall);
@@ -194,7 +169,7 @@ namespace XLParser
         public static bool IsUnaryPostfixOperation(this ParseTreeNode input)
         {
             return input.IsFunction()
-                   && input.ChildNodes.Count == 2
+                   && input.ChildNodes.Count() == 2
                    && input.ChildNodes[1].Term.Flags.HasFlag(TermFlags.IsOperator);
 
         }
@@ -232,59 +207,18 @@ namespace XLParser
             }
             if (input.IsExternalUDFunction())
             {
-                return $"{input.ChildNodes[0].Print()}{GetFunction(input.ChildNodes[1])}";
+                return String.Format("{0}{1}", input.ChildNodes[0].Print(), GetFunction(input.ChildNodes[1]));
             }
 
-            throw new ArgumentException("Not a function call", nameof(input));
+            throw new ArgumentException("Not a function call", "input");
         }
 
         /// <summary>
         /// Check if this node is a specific function
         /// </summary>
-        public static bool MatchFunction(this ParseTreeNode input, string functionName)
+        public static bool MatchFunction(this ParseTreeNode input, String functionName)
         {
             return IsFunction(input) && GetFunction(input) == functionName;
-        }
-
-        /// <summary>
-        /// Get all the arguments of a function or operation
-        /// </summary>
-        public static IEnumerable<ParseTreeNode> GetFunctionArguments(this ParseTreeNode input)
-        {
-            if (input.IsNamedFunction())
-            {
-                return input
-                    .ChildNodes[1] // "Arguments" nonterminal
-                    .ChildNodes    // "Argument" nonterminals
-                    .Select(node => node.ChildNodes[0])
-                    ;
-            }
-            if (input.IsBinaryOperation())
-            {
-                return new[] {input.ChildNodes[0], input.ChildNodes[2]};
-            }
-            if (input.IsUnaryPrefixOperation())
-            {
-                return new[] {input.ChildNodes[1]};
-            }
-            if (input.IsUnaryPostfixOperation())
-            {
-                return new[] {input.ChildNodes[0]};
-            }
-            if (input.IsUnion())
-            {
-                return input.ChildNodes[0].ChildNodes;
-            }
-            if (input.IsExternalUDFunction())
-            {
-                return input // Reference
-                    .ChildNodes[1] // UDFunctionCall
-                    .ChildNodes[1] // Arguments
-                    .ChildNodes // Argument nonterminals
-                    .Select(node => node.ChildNodes[0])
-                    ;
-            }
-            throw new ArgumentException("Not a function call", nameof(input));
         }
 
         /// <summary>
@@ -292,8 +226,7 @@ namespace XLParser
         /// </summary>
         public static bool IsBuiltinFunction(this ParseTreeNode node)
         {
-            return node.IsFunction() &&
-                (node.ChildNodes[0].Is(GrammarNames.FunctionName) || node.ChildNodes[0].Is(GrammarNames.RefFunctionName));
+            return node.IsFunction() && (node.ChildNodes[0].Is(GrammarNames.ExcelFunction) || node.ChildNodes[0].Is(GrammarNames.RefFunctionName));
         }
 
         /// <summary>
@@ -301,8 +234,15 @@ namespace XLParser
         /// </summary>
         public static bool IsIntersection(this ParseTreeNode input)
         {
-            return IsBinaryOperation(input) &&
+            try
+            {
+                return IsBinaryOperation(input) &&
                        input.ChildNodes[1].Token.Terminal.Name == GrammarNames.TokenIntersect;
+            }
+            catch (Exception)
+            {
+                return false;
+            }
         }
 
         /// <summary>
@@ -310,9 +250,14 @@ namespace XLParser
         /// </summary>
         public static bool IsUnion(this ParseTreeNode input)
         {
-            return input.Is(GrammarNames.ReferenceFunctionCall)
-                && input.ChildNodes.Count == 1
-                && input.ChildNodes[0].Is(GrammarNames.Union);
+            try
+            {
+                return input.Is(GrammarNames.ReferenceFunctionCall) && input.ChildNodes[0].Is(GrammarNames.Union);
+            }
+            catch (Exception)
+            {
+                return false;
+            }
         }
 
         /// <summary>
@@ -323,11 +268,6 @@ namespace XLParser
             return (input.Is(GrammarNames.FunctionCall) && input.ChildNodes[0].Is(GrammarNames.FunctionName))
                 || (input.Is(GrammarNames.ReferenceFunctionCall) && input.ChildNodes[0].Is(GrammarNames.RefFunctionName))
                 || input.Is(GrammarNames.UDFunctionCall);
-        }
-
-        public static bool IsOperation(this ParseTreeNode input)
-        {
-            return input.IsBinaryOperation() || input.IsUnaryOperation();
         }
 
         public static bool IsExternalUDFunction(this ParseTreeNode input)
@@ -343,88 +283,6 @@ namespace XLParser
             return IsUnaryPrefixOperation(input)
                    && input.ChildNodes[1].ChildNodes[0].Is(GrammarNames.Constant)
                    && input.ChildNodes[1].ChildNodes[0].ChildNodes[0].Is(GrammarNames.Number);
-        }
-
-        /// <summary>
-        /// Extract all of the information from a Prefix nonterminal
-        /// </summary>
-        public static PrefixInfo GetPrefixInfo(this ParseTreeNode prefix)
-        {
-            if(prefix.Type() != GrammarNames.Prefix) throw new ArgumentException("Not a prefix", nameof(prefix));
-
-            string filePath = null;
-            int? fileNumber = null;
-            string fileName = null;
-            string sheetName = null;
-            string multipleSheets = null;
-
-            // Token number we're processing
-            int cur = 0;
-
-            // Check for quotes
-            bool quoted = prefix.ChildNodes[cur].Is("'");
-            if (quoted) cur++;
-            
-            // Check and process file
-            if (prefix.ChildNodes[cur].Is(GrammarNames.File))
-            {
-                var file = prefix.ChildNodes[cur];
-
-                if (file.ChildNodes[0].Is(GrammarNames.TokenFileNameNumeric))
-                {
-                    // Numeric filename
-                    int n;
-                    int.TryParse(Substr(file.ChildNodes[0].Print(), 1, 1), out n);
-                    fileNumber = n;
-                    if (fileNumber == 0) fileNumber = null;
-                }
-                else
-                {
-                    // String filename
-                    var icur = 0;
-                    // Check if it includes a path
-                    if (file.ChildNodes[icur].Is(GrammarNames.TokenFilePathWindows))
-                    {
-                        filePath = file.ChildNodes[icur].Print();
-                        icur++;
-                    }
-                    fileName = Substr(file.ChildNodes[icur].Print(), 1, 1);
-                }
-
-                cur++;
-            }
-            
-            // Check for a non-quoted sheet
-            if (prefix.ChildNodes[cur].Is(GrammarNames.TokenSheet))
-            {
-                sheetName = Substr(prefix.ChildNodes[cur].Print(), 1);
-            }
-            // Check for a quoted sheet
-            else if (prefix.ChildNodes[cur].Is(GrammarNames.TokenSheetQuoted))
-            {
-                // remove quote and !
-                sheetName = Substr(prefix.ChildNodes[cur].Print(), 2);
-            }
-            // Check if multiple sheets
-            else if (prefix.ChildNodes[cur].Is(GrammarNames.TokenMultipleSheets))
-            {
-                multipleSheets = Substr(prefix.ChildNodes[cur].Print(), 1);
-            }
-
-            // Put it all into the convencience class
-            return new PrefixInfo(
-                sheetName,
-                fileNumber,
-                fileName,
-                filePath,
-                multipleSheets,
-                quoted
-                );
-        }
-
-        private static string Substr(string s, int removeLast = 0, int removeFirst = 0)
-        {
-            return s.Substring(removeFirst, s.Length-removeLast-removeFirst);
         }
 
         /// <summary>
@@ -451,30 +309,21 @@ namespace XLParser
         /// </remarks>
         public static ParseTreeNode SkipToRelevant(this ParseTreeNode input)
         {
-            while (true)
+            switch (input.Type())
             {
-                switch (input.Type())
-                {
-                    case GrammarNames.FormulaWithEq:
-                    case GrammarNames.ArrayFormula:
-                        input = input.ChildNodes[1];
-                        break;
-                    case GrammarNames.Argument:
-                    case GrammarNames.Formula:
-                    case GrammarNames.Reference:
-                        // This also catches parentheses
-                        if (input.ChildNodes.Count == 1)
-                        {
-                            input = input.ChildNodes[0];
-                        }
-                        else
-                        {
-                            return input;
-                        }
-                        break;
-                    default:
-                        return input;
-                }
+                case GrammarNames.FormulaWithEq:
+                case GrammarNames.ArrayFormula:
+                    return SkipToRelevant(input.ChildNodes[1]);
+                case GrammarNames.Formula:
+                case GrammarNames.Reference:
+                    // This also catches parentheses
+                    if (input.ChildNodes.Count == 1)
+                    {
+                        return SkipToRelevant(input.ChildNodes[0]);
+                    }
+                    goto default;
+                default:
+                    return input;
             }
         }
 
@@ -492,15 +341,14 @@ namespace XLParser
             // (Lazy) enumerable for printed childs
             var childs = input.ChildNodes.Select(Print);
             // Concrete list when needed
-            List<string> childsL;
+            List<String> childsL;
 
-            string ret;
             // Switch on nonterminals
             switch (input.Term.Name)
             {
                 case GrammarNames.Formula:
                     // Check if these are brackets, otherwise print first child
-                    return IsParentheses(input) ? $"({childs.First()})" : childs.First();
+                    return IsParentheses(input) ? String.Format("({0})", childs.First()) : childs.First();
 
                 case GrammarNames.FunctionCall:
                 case GrammarNames.ReferenceFunctionCall:
@@ -509,7 +357,7 @@ namespace XLParser
 
                     if (input.IsNamedFunction())
                     {
-                        return string.Join("", childsL) + ")";
+                        return String.Join("", childsL) + ")";
                     }
 
                     if (input.IsBinaryOperation())
@@ -523,32 +371,50 @@ namespace XLParser
                         {
                             format = "{0}{1}{2}";
                         }
-
-                        return string.Format(format, childsL[0], childsL[1], childsL[2]);
+                        
+                        return String.Format(format, childsL[0], childsL[1], childsL[2]);
                     }
 
                     if (input.IsUnion())
                     {
-                        return $"({string.Join(",", childsL)})";
+                        return String.Format("({0})", String.Join(",", childsL));
                     }
 
                     if (input.IsUnaryOperation())
                     {
-                        return string.Join("", childsL);
+                        return String.Join("", childsL);
                     }
 
                     throw new ArgumentException("Unknown function type.");
 
                 case GrammarNames.Reference:
-                    if (IsParentheses(input))
+                    /*if (IsParentheses(input) || IsUnion(input))
                     {
-                        return $"({childs.First()})";
+                        return String.Format("({0})", childs.First());
                     }
 
-                    return string.Join("", childs);
+                    childsL = childs.ToList();
+                    if (IsIntersection(input))
+                    {
+                        return String.Format("{0} {1}", childsL[0], childsL[2]);
+                    }
+
+                    if (IsBinaryOperation(input))
+                    {
+                        return String.Format("{0}{1}{2}", childsL[0], childsL[1], childsL[2]);
+                    }*/
+                    if (IsParentheses(input))
+                    {
+                        return String.Format("({0})", childs.First());
+                    }
+
+                    return String.Join("", childs);
+
+                case GrammarNames.File:
+                    return String.Format("[{0}]", childs.First());
 
                 case GrammarNames.Prefix:
-                    ret = string.Join("", childs);
+                    var ret = String.Join("", childs);
                     // The exclamation mark token is not included in the parse tree, so we have to add that if it's a single file
                     if (input.ChildNodes.Count == 1 && input.ChildNodes[0].Is(GrammarNames.File))
                     {
@@ -559,42 +425,27 @@ namespace XLParser
                 case GrammarNames.ArrayFormula:
                     return "{=" + childs.ElementAt(1) + "}";
 
-                case GrammarNames.StructureReference:
-                    ret = "";
-                    var hastable = input.ChildNodes.Count == 2;
-                    var contentsNode = hastable ? 1 : 0;
+                case GrammarNames.DynamicDataExchange:
                     childsL = childs.ToList();
-                    if (hastable) ret += childsL[0];
-
-                    if (input.ChildNodes[contentsNode].Is(GrammarNames.StructureReferenceColumnOrKeyword))
-                    {
-                        ret += childsL[contentsNode];
-                    } else
-                    {
-                        ret += $"[{childsL[contentsNode]}]";
-                    }
-
-                    return ret;
+                    return String.Format("{0}!{1}", childsL[0], childsL[1]);
 
                 // Terms for which to print all child nodes concatenated
                 case GrammarNames.ArrayConstant:
-                case GrammarNames.DynamicDataExchange:
                 case GrammarNames.FormulaWithEq:
-                case GrammarNames.File:
-                case GrammarNames.StructureReferenceExpression:
-                    return string.Join("", childs);
+                    return String.Join("", childs);
 
                 // Terms for which we print the childs comma-separated
                 case GrammarNames.Arguments:
                 case GrammarNames.ArrayRows:
                 case GrammarNames.Union:
-                    return string.Join(",", childs);
+                    return String.Join(",", childs);
 
                 case GrammarNames.ArrayColumns:
-                    return string.Join(";", childs);
+                    return String.Join(";", childs);
 
                 case GrammarNames.ConstantArray:
-                    return $"{{{childs.First()}}}";
+                    return String.Format("{{{0}}}", childs.First());
+
 
                 default:
                     // If it is not defined above and the number of childs is exactly one, we want to just print the first child
@@ -602,7 +453,7 @@ namespace XLParser
                     {
                         return childs.First();
                     }
-                    throw new ArgumentException($"Could not print node of type '{input.Term.Name}'.\nThis probably means the excel grammar was modified without the print function being modified");
+                    throw new ArgumentException(String.Format("Could not print node of type '{0}'.\nThis probably means the excel grammar was modified without the print function being modified", input.Term.Name));
             }
         }
     }

@@ -77,6 +77,7 @@
     <Content Include="img\logo-infotron.png" />
     <Content Include="img\logo-spreadsheet-lab.png" />
     <Content Include="img\logo-tudelft.png" />
+    <None Include="Resources\ExcelBuiltinFunctionList.txt" />
     <Content Include="Web.config" />
     <Content Include="xlparser-web.css" />
   </ItemGroup>
@@ -90,18 +91,34 @@
     </Compile>
     <Compile Include="Parse.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
-  </ItemGroup>
-  <ItemGroup>
-    <ProjectReference Include="..\..\src\XLParser\XLParser.csproj">
-      <Project>{fb048d20-29fd-4d2c-a336-59f93f9a68f3}</Project>
-      <Name>XLParser</Name>
-    </ProjectReference>
+    <Compile Include="Properties\Resources.Designer.cs">
+      <AutoGen>True</AutoGen>
+      <DesignTime>True</DesignTime>
+      <DependentUpon>Resources.resx</DependentUpon>
+    </Compile>
+    <Compile Include="XLParserVersions\v100\ExcelFormulaGrammar.cs" />
+    <Compile Include="XLParserVersions\v100\ExcelFormulaParser.cs" />
+    <Compile Include="XLParserVersions\v112\ExcelFormulaGrammar.cs" />
+    <Compile Include="XLParserVersions\v112\ExcelFormulaParser.cs" />
+    <Compile Include="XLParserVersions\v113\ExcelFormulaGrammar.cs" />
+    <Compile Include="XLParserVersions\v113\ExcelFormulaParser.cs" />
+    <Compile Include="XLParserVersions\v114\ExcelFormulaGrammar.cs" />
+    <Compile Include="XLParserVersions\v114\ExcelFormulaParser.cs" />
+    <Compile Include="XLParserVersions\v120\ExcelFormulaGrammar.cs" />
+    <Compile Include="XLParserVersions\v120\ExcelFormulaParser.cs" />
+    <Compile Include="XLParserVersions\v120\PrefixInfo.cs" />
   </ItemGroup>
   <ItemGroup>
     <WCFMetadata Include="Service References\" />
   </ItemGroup>
   <ItemGroup>
     <Folder Include="Properties\PublishProfiles\" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Properties\Resources.resx">
+      <Generator>ResXFileCodeGenerator</Generator>
+      <LastGenOutput>Resources.Designer.cs</LastGenOutput>
+    </EmbeddedResource>
   </ItemGroup>
   <PropertyGroup>
     <VisualStudioVersion Condition="'$(VisualStudioVersion)' == ''">10.0</VisualStudioVersion>
