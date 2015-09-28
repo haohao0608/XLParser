@@ -17,7 +17,6 @@ namespace XLParser
 
         public Terminal at => ToTerm("@");
         public Terminal comma => ToTerm(",");
-        public Terminal colon => ToTerm(":");
         public Terminal semicolon => ToTerm(";");
         public Terminal OpenParen => ToTerm("(");
         public Terminal CloseParen => ToTerm(")");
@@ -28,25 +27,26 @@ namespace XLParser
         public Terminal OpenCurlyParen => ToTerm("{");
         public Terminal QuoteS => ToTerm("'");
 
-        public Terminal mulop => ToTerm("*");
-        public Terminal plusop => ToTerm("+");
-        public Terminal divop => ToTerm("/");
-        public Terminal minop => ToTerm("-");
-        public Terminal concatop => ToTerm("&");
-        public Terminal expop => ToTerm("^");
+        public Terminal mulop => ToTerm(Operator.Mult.Symbol());
+        public Terminal plusop => ToTerm(Operator.Plus.Symbol());
+        public Terminal divop => ToTerm(Operator.Div.Symbol());
+        public Terminal minop => ToTerm(Operator.Div.Symbol());
+        public Terminal concatop => ToTerm(Operator.Concat.Symbol());
+        public Terminal expop => ToTerm(Operator.Exp.Symbol());
 
         // Intersect op is a single space, which cannot be parsed normally so we need an ImpliedSymbolTerminal
         // Attention: ImpliedSymbolTerminal seems to break if you assign it a priority, and it's default priority is low
         public Terminal intersectop { get; } = new ImpliedSymbolTerminal(GrammarNames.TokenIntersect);
+        public Terminal rangeop => ToTerm(Operator.Range.Symbol());
 
-        public Terminal percentop => ToTerm("%");
+        public Terminal percentop => ToTerm(Operator.Percent.Symbol());
 
-        public Terminal gtop => ToTerm(">");
-        public Terminal eqop => ToTerm("=");
-        public Terminal ltop => ToTerm("<");
-        public Terminal neqop => ToTerm("<>");
-        public Terminal gteop => ToTerm(">=");
-        public Terminal lteop => ToTerm("<=");
+        public Terminal gtop => ToTerm(Operator.Gt.Symbol());
+        public Terminal eqop => ToTerm(Operator.Eq.Symbol());
+        public Terminal ltop => ToTerm(Operator.Lt.Symbol());
+        public Terminal neqop => ToTerm(Operator.Neq.Symbol());
+        public Terminal gteop => ToTerm(Operator.Gte.Symbol());
+        public Terminal lteop => ToTerm(Operator.Lte.Symbol());
 
         #endregion
 
@@ -282,8 +282,8 @@ namespace XLParser
             //MarkTransient(Argument);
 
             PrefixOp.Rule =
-                ImplyPrecedenceHere(Precedence.UnaryPreFix) + plusop
-                | ImplyPrecedenceHere(Precedence.UnaryPreFix) + minop;
+                ImplyPrecedenceHere(Operators.Precedences.UnaryPreFix) + plusop
+                | ImplyPrecedenceHere(Operators.Precedences.UnaryPreFix) + minop;
             MarkTransient(PrefixOp);
 
             InfixOp.Rule =
@@ -317,7 +317,7 @@ namespace XLParser
                 ;
 
             ReferenceFunctionCall.Rule =
-                  Reference + colon + Reference
+                  Reference + rangeop + Reference
                 | Reference + intersectop + Reference
                 | OpenParen + Union + CloseParen
                 | RefFunctionName + Arguments + CloseParen
@@ -376,11 +376,11 @@ namespace XLParser
 
             StructureReferenceExpression.Rule =
                   StructureReferenceColumnOrKeyword
-                | StructureReferenceColumnOrKeyword + colon + StructureReferenceColumnOrKeyword
+                | StructureReferenceColumnOrKeyword + rangeop + StructureReferenceColumnOrKeyword
                 | StructureReferenceColumnOrKeyword + comma + StructureReferenceColumnOrKeyword
-                | StructureReferenceColumnOrKeyword + comma + StructureReferenceColumnOrKeyword + colon + StructureReferenceColumnOrKeyword
+                | StructureReferenceColumnOrKeyword + comma + StructureReferenceColumnOrKeyword + rangeop + StructureReferenceColumnOrKeyword
                 | StructureReferenceColumnOrKeyword + comma + StructureReferenceColumnOrKeyword + comma + StructureReferenceColumnOrKeyword
-                | StructureReferenceColumnOrKeyword + comma + StructureReferenceColumnOrKeyword + comma + StructureReferenceColumnOrKeyword + colon + StructureReferenceColumnOrKeyword
+                | StructureReferenceColumnOrKeyword + comma + StructureReferenceColumnOrKeyword + comma + StructureReferenceColumnOrKeyword + rangeop + StructureReferenceColumnOrKeyword
                 ;
 
             StructureReference.Rule =
@@ -406,15 +406,15 @@ namespace XLParser
             // Some of these operators are neutral associative instead of left associative,
             // but this ensures a consistent parse tree. As a lot of code is "hardcoded" onto the specific
             // structure of the parse tree, we like consistency.
-            RegisterOperators(Precedence.Comparison, Associativity.Left, eqop, ltop, gtop, lteop, gteop, neqop);
-            RegisterOperators(Precedence.Concatenation, Associativity.Left, concatop);
-            RegisterOperators(Precedence.Addition, Associativity.Left, plusop, minop);
-            RegisterOperators(Precedence.Multiplication, Associativity.Left, mulop, divop);
-            RegisterOperators(Precedence.Exponentiation, Associativity.Left, expop);
-            RegisterOperators(Precedence.UnaryPostFix, Associativity.Left, percentop);
-            RegisterOperators(Precedence.Union, Associativity.Left, comma);
-            RegisterOperators(Precedence.Intersection, Associativity.Left, intersectop);
-            RegisterOperators(Precedence.Range, Associativity.Left, colon);
+            RegisterOperators(Operators.Precedences.Comparison, Associativity.Left, eqop, ltop, gtop, lteop, gteop, neqop);
+            RegisterOperators(Operators.Precedences.Concatenation, Associativity.Left, concatop);
+            RegisterOperators(Operators.Precedences.Addition, Associativity.Left, plusop, minop);
+            RegisterOperators(Operators.Precedences.Multiplication, Associativity.Left, mulop, divop);
+            RegisterOperators(Operators.Precedences.Exponentiation, Associativity.Left, expop);
+            RegisterOperators(Operators.Precedences.UnaryPostFix, Associativity.Left, percentop);
+            RegisterOperators(Operators.Precedences.Union, Associativity.Left, comma);
+            RegisterOperators(Operators.Precedences.Intersection, Associativity.Left, intersectop);
+            RegisterOperators(Operators.Precedences.Range, Associativity.Left, rangeop);
 
             //RegisterOperators(Precedence.ParameterSeparator, comma);
 
@@ -424,24 +424,6 @@ namespace XLParser
         
 
         #region Precedence and Priority constants
-        // Source: https://support.office.com/en-us/article/Calculation-operators-and-precedence-48be406d-4975-4d31-b2b8-7af9e0e2878a
-        // Could also be an enum, but this way you don't need int casts
-        private static class Precedence
-        {
-            // Don't use priority 0, Irony seems to view it as no priority set
-            public const int Comparison = 1;
-            public const int Concatenation = 2;
-            public const int Addition = 3;
-            public const int Multiplication = 4;
-            public const int Exponentiation = 5;
-            public const int UnaryPostFix = 6;
-            public const int UnaryPreFix = 7;
-            //public const int Reference = 8;
-            public const int Union = 9;
-            public const int Intersection = 10;
-            public const int Range = 11;
-        }
-
         // Terminal priorities, indicates to lexer which token it should pick when multiple tokens can match
         // E.g. "A1" is both a CellToken and NamedRange, pick celltoken because it has a higher priority
         // E.g. "A1Blah" Is Both a CellToken + NamedRange, NamedRange and NamedRangeCombination, pick NamedRangeCombination

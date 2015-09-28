@@ -50,6 +50,8 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="AST\IAst.cs" />
+    <Compile Include="Operators.cs" />
     <Compile Include="ExcelFormulaParser.cs" />
     <Compile Include="ExcelFormulaGrammar.cs" />
     <Compile Include="FormulaAnalyzer.cs" />

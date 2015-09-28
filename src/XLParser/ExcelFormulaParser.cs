@@ -488,7 +488,7 @@ namespace XLParser
         /// </summary>
         public static string Print(ParseTreeNode input, Func<ParseTreeNode, string> customPrinter)
         {
-            // For terminals, just print the token text
+            // For other terminals, just print the token text
             if (input.Term is Terminal)
             {
                 return input.Token.Text;
