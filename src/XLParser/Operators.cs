@@ -91,7 +91,7 @@ namespace XLParser
                 case Operator.Range:
                     return ":";
                 case Operator.Intersect:
-                    return GrammarNames.TokenIntersect;
+                    return " ";
                 case Operator.Union:
                     return GrammarNames.TokenUnionOperator;
                 case Operator.Concat:
@@ -131,6 +131,7 @@ namespace XLParser
             public const int Union = 9;
             public const int Intersection = 10;
             public const int Range = 11;
+
         }
 
         public static int Precedence(this Operator op)
@@ -165,6 +166,88 @@ namespace XLParser
                 default:
                     throw new ArgumentOutOfRangeException(nameof(op), op, null);
             }
+        }
+
+        /// <summary>
+        /// Return Arity flags for the operator
+        /// </summary>
+        /// <remarks>
+        /// 1 = Arity 1
+        /// 2 = Arity 2
+        /// </remarks>
+        public static int Arity(this Operator op)
+        {
+            switch (op)
+            {
+                case Operator.Plus:
+                case Operator.Min:
+                    return 1 + 2;
+                case Operator.Mult:
+                case Operator.Div:
+                case Operator.Exp:
+                case Operator.Range:
+                case Operator.Intersect:
+                case Operator.Union:
+                case Operator.Concat:
+                case Operator.Eq:
+                case Operator.Neq:
+                case Operator.Lt:
+                case Operator.Gt:
+                case Operator.Lte:
+                case Operator.Gte:
+                    return 2;
+                case Operator.Percent:
+                    return 1;
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(op), op, null);
+            }
+        }
+
+        public static bool IsReferenceOperator(this Operator op)
+        {
+            switch (op)
+            {
+                case Operator.Plus:
+                case Operator.Min:
+                case Operator.Mult:
+                case Operator.Div:
+                case Operator.Exp:
+                case Operator.Concat:
+                case Operator.Percent:
+                case Operator.Eq:
+                case Operator.Neq:
+                case Operator.Lt:
+                case Operator.Gt:
+                case Operator.Lte:
+                case Operator.Gte:
+                    return false;
+                case Operator.Range:
+                case Operator.Intersect:
+                case Operator.Union:
+                    return true;
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(op), op, null);
+            }
+        }
+
+        public static bool IsUnary(this Operator op)
+        {
+            return (op.Arity() & 1) == 1;
+        }
+
+        public static bool IsBinary(this Operator op)
+        {
+            return (op.Arity() & 2) == 2;
+        }
+
+        public static bool IsUnaryPostFix(this Operator op)
+        {
+            return op == Operator.Percent;
+        }
+
+        public static bool IsUnaryPreFix(this Operator op)
+        {
+            return op == Operator.Plus || op == Operator.Min;
         }
     }
 }
